@@ -66,7 +66,13 @@ jobs:
               android:accessibilityFeedbackType="feedbackGeneric"
               android:canPerformGestures="true"
               android:canTakeScreenshot="true"
-              android:description="Game ke liye screen dekhta hai aur tap karta hai"/>
+              android:description="@string/svc_desc"/>
+          EOF
+          mkdir -p $(dirname app/src/main/res/values/strings.xml)
+          cat > app/src/main/res/values/strings.xml <<'EOF'
+          <resources>
+              <string name="svc_desc">Game ke liye screen dekhta hai aur tap karta hai</string>
+          </resources>
           EOF
           mkdir -p $(dirname app/src/main/java/com/example/autoplayer/AutoPlayService.kt)
           cat > app/src/main/java/com/example/autoplayer/AutoPlayService.kt <<'EOF'
@@ -111,7 +117,8 @@ jobs:
                       val history = ArrayList<String>()
                       while (running && steps < MAX_STEPS) {
                           try {
-                              val shot = screenshot() ?: run { Thread.sleep(1000); null } ?: continue
+                              val shot = screenshot()
+                              if (shot == null) { Thread.sleep(1000); continue }
                               val scale = 720f / shot.width
                               val small = Bitmap.createScaledBitmap(shot, 720, (shot.height * scale).toInt(), true)
                               val cmd = askClaude(small, history)
@@ -139,8 +146,8 @@ jobs:
                   var result: Bitmap? = null
                   val latch = CountDownLatch(1)
                   takeScreenshot(Display.DEFAULT_DISPLAY, Executors.newSingleThreadExecutor(),
-                      object : TakeScreenshotCallback {
-                          override fun onSuccess(s: ScreenshotResult) {
+                      object : AccessibilityService.TakeScreenshotCallback {
+                          override fun onSuccess(s: AccessibilityService.ScreenshotResult) {
                               result = Bitmap.wrapHardwareBuffer(s.hardwareBuffer, s.colorSpace)
                                   ?.copy(Bitmap.Config.ARGB_8888, false)
                               s.hardwareBuffer.close(); latch.countDown()
@@ -235,7 +242,7 @@ jobs:
                           if (key.text.isBlank()) { toast("API key daalo"); return@setOnItemClickListener }
                           prefs.edit().putString("key", key.text.toString()).apply()
                           AutoPlayService.apiKey = key.text.toString().trim()
-                          startActivity(pm.getLaunchIntentForPackage(apps[i].activityInfo.packageName))
+                          pm.getLaunchIntentForPackage(apps[i].activityInfo.packageName)?.let { startActivity(it) }
                           ui.postDelayed({ svc.startPlaying() }, 3000)
                       }
                   }
@@ -265,3 +272,4 @@ jobs:
         with:
           name: AutoPlayer-apk
           path: app/build/outputs/apk/debug/app-debug.apk
+          
